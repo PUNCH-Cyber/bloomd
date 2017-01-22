@@ -118,6 +118,17 @@ int filtmgr_drop_filter(bloom_filtmgr *mgr, char *filter_name);
 int filtmgr_unmap_filter(bloom_filtmgr *mgr, char *filter_name);
 
 /**
+* Combines the unmap and the flush into one operation.
+* Acquires the lock on the filter at the beginning to ensure
+* no race conditions apply to writing a filter that's in the
+* process of being dumped.
+*
+* @arg filter_name The name of the filter to operate on
+* @return 0 on success, -1 if the filter does not exist
+*/
+int filtmgr_flush_and_unmap_filter(bloom_filtmgr *mgr, char *filter_name);
+
+/**
  * Clears the filter from the internal data stores. This can only
  * be performed if the filter is proxied.
  * @arg filter_name The name of the filter to delete

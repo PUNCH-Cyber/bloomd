@@ -30,7 +30,11 @@ static const bloom_config DEFAULT_CONFIG = {
     3600,               // Cold after an hour
     0,                  // Persist to disk by default
     1,                  // Only a single worker thread by default
-    0                   // Do NOT use mmap by default
+    0,                  // Do NOT use mmap by default
+    0,                  // Do not enable memory checking by default
+    80,                 // default max memory percent = 80%
+    60                  // default safe memory percent = 60%
+
 };
 
 /**
@@ -120,6 +124,12 @@ static int config_callback(void* user, const char* section, const char* name, co
          return value_to_int(value, &config->use_mmap);
     } else if (NAME_MATCH("workers")) {
          return value_to_int(value, &config->worker_threads);
+    } else if (NAME_MATCH("memory_check_interval")) {
+        return value_to_int(value, &config->memory_check_interval);
+    } else if (NAME_MATCH("max_memory_percent")) {
+        return value_to_int(value, &config->max_memory_percent);
+    } else if (NAME_MATCH("safe_memory_percent")) {
+        return value_to_int(value, &config->safe_memory_percent);
 
     // Handle the int64 cases
     } else if (NAME_MATCH("initial_capacity")) {

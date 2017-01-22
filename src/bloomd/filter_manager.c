@@ -530,6 +530,37 @@ LEAVE:
 }
 
 /**
+* Combines the unmap and the flush into one operation.
+* Acquires the lock on the filter at the beginning to ensure
+* no race conditions apply to writing a filter that's in the
+* process of being dumped.
+*
+* @arg filter_name The name of the filter to operate on
+* @return 0 on success, -1 if the filter does not exist
+*/
+int filtmgr_flush_and_unmap_filter(bloom_filtmgr *mgr, char *filter_name) {
+    // Get the filter
+    bloom_filter_wrapper *filt = take_filter(mgr, filter_name);
+    if (!filt) return -1;
+
+    // Acquire the write lock
+    pthread_rwlock_wrlock(&filt->rwlock);
+
+    // Flush, but only if we are not in memory
+    if (! filt->filter->filter_config.in_memory)
+        bloomf_flush(filt->filter);
+
+    // Close the filter
+    bloomf_close(filt->filter);
+
+    // Release the lock
+    pthread_rwlock_unlock(&filt->rwlock);
+
+    return 0;
+}
+
+
+/**
  * Allocates space for and returns a linked
  * list of all the filters.
  * @arg mgr The manager to list from

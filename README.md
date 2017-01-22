@@ -139,6 +139,21 @@ Each configuration option is documented below:
     be faulted back into memory. Set to 3600 seconds by default (1 hour).
     Set to 0 to disable cold faulting.
 
+ * memory\_check\_interval : This is the time interval in seconds 
+    when the memory check thread will test to see if the bloomd has
+    exceeded allowed memory. If set, then the bloomd will check to make sure 
+    it never exceeds max\_memory\_percent of the available physical memory
+    on the server. If that is exceeded, then bloomd will force-unmap
+    filters until memory usage gets below safe_memory_percent. NOTE: if
+    set at the same time as in\_memory, this will cause bloomd to lose
+    data when it unmaps a filter. Set to 0 to disable memory checking.
+    Defaults to 0.
+    
+ * max\_memory\_percent , safe\_memory\_percent : integer percentages from 1 to 
+    100. See memory_check_interval discussion above for their usage. These are
+    ignored if memory checking is disabled. max\_memory\_percent defaults 
+    to 80, safe\_memory\_percent defaults to 60.
+
  * in\_memory : If set to 1, then all filters are in-memory ONLY by
     default. This means they are not persisted to disk, and are not
     eligible for cold fault out. Defaults to 0.

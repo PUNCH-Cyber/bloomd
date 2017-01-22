@@ -16,7 +16,10 @@ envtest.Program('test_libbloom_runner', Glob("tests/libbloom/*.c"), LIBS=["check
 envinih = Environment(CPATH = ['deps/inih/'], CFLAGS="-O2")
 inih = envinih.Library('inih', Glob("deps/inih/*.c"))
 
-envbloomd_with_err = Environment(CCFLAGS = '-std=c99 -D_GNU_SOURCE -Wall -Wextra -Werror -O2 -pthread -Isrc/bloomd/ -Ideps/inih/ -Ideps/libev/ -Isrc/libbloom/')
+envmemory = Environment(CPATH= ['deps/limbemory/'], CFLAGS="-O2")
+memory = envmemory.Library("memory", Glob("deps/libmemory/*.c"))
+
+envbloomd_with_err = Environment(CCFLAGS = '-std=c99 -D_GNU_SOURCE -Wall -Wextra -Werror -O2 -pthread -Isrc/bloomd/ -Ideps/inih/ -Ideps/libev/ -Ideps/libmemory/ -Isrc/libbloom/')
 envbloomd_without_unused_err = Environment(CCFLAGS = '-std=c99 -D_GNU_SOURCE -Wall -Wextra -Wno-unused-function -Wno-unused-result -Werror -O2 -pthread -Isrc/bloomd/ -Ideps/inih/ -Ideps/libev/ -Isrc/libbloom/')
 envbloomd_without_err = Environment(CCFLAGS = '-std=c99 -D_GNU_SOURCE -O2 -pthread -Isrc/bloomd/ -Ideps/inih/ -Ideps/libev/ -Isrc/libbloom/')
 
@@ -29,7 +32,7 @@ objs =  envbloomd_with_err.Object('src/bloomd/config', 'src/bloomd/config.c') + 
         envbloomd_with_err.Object('src/bloomd/background', 'src/bloomd/background.c') + \
         envbloomd_with_err.Object('src/bloomd/art', 'src/bloomd/art.c')
 
-bloom_libs = ["pthread", bloom, murmur, inih, spooky, "m"]
+bloom_libs = ["pthread", bloom, murmur, inih, spooky, "m", memory]
 if plat == 'Linux':
    bloom_libs.append("rt")
 

@@ -229,6 +229,7 @@ static void* memory_check_thread_main(void *in) {
             current_memory = getCurrentRSS();
             if (current_memory > max_memory) {
                 syslog(LOG_INFO, "Max memory exceeded. Unmapping filters to reclaim RAM.");
+
                 bloom_filter_list_head *head;
                 int res = filtmgr_list_filters(mgr, NULL, &head);
                 if (res != 0) {
@@ -236,31 +237,21 @@ static void* memory_check_thread_main(void *in) {
                     continue;
                 }
                 bloom_filter_list *node = head->head;
-
                 unsigned int cmds = 0;
 
-                while (current_memory > safe_memory){
+                while ((current_memory > safe_memory) && node){
+
                     // start flushing filters until you're back below the safe-water mark
-                    syslog(LOG_INFO, "Unmapping filter '%s' to free RAM.", node->filter_name);
-                    /**
-                    * Combines the unmap and the flush into one operation.
-                    * Acquires the lock on the filter at the beginning to ensure
-                    * no race conditions apply to writing a filter that's in the
-                    * process of being dumped.
-                    *
-                    * @arg filter_name The name of the filter to operate on
-                    * @return 0 on success, -1 if the filter does not exist
-                    */
+                    syslog(LOG_WARNING, "Unmapping filter '%s' to free RAM.", node->filter_name);
                     filtmgr_flush_and_unmap_filter(mgr, node->filter_name);
-
-
-                    if (!(++cmds % PERIODIC_CHECKPOINT)) filtmgr_client_checkpoint(mgr);
-
-                    current_memory = getCurrentRSS();
+                    if (!(++cmds % PERIODIC_CHECKPOINT)) {
+                        filtmgr_client_checkpoint(mgr);
+                        current_memory = getCurrentRSS();
+                    }
                     node = node->next;
                 }
-
                 filtmgr_cleanup_list(head);
+
             }
         }
 

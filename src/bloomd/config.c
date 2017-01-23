@@ -124,8 +124,8 @@ static int config_callback(void* user, const char* section, const char* name, co
          return value_to_int(value, &config->use_mmap);
     } else if (NAME_MATCH("workers")) {
          return value_to_int(value, &config->worker_threads);
-    } else if (NAME_MATCH("memory_check_interval")) {
-        return value_to_int(value, &config->memory_check_interval);
+    } else if (NAME_MATCH("memory_check")) {
+        return value_to_int(value, &config->memory_check);
     } else if (NAME_MATCH("max_memory_percent")) {
         return value_to_int(value, &config->max_memory_percent);
     } else if (NAME_MATCH("safe_memory_percent")) {

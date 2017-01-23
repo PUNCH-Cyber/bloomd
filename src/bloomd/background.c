@@ -25,7 +25,6 @@
 
 static void* flush_thread_main(void *in);
 static void* unmap_thread_main(void *in);
-static void* memory_check_thread_main(void *in);
 typedef struct {
     bloom_config *config;
     bloom_filtmgr *mgr;
@@ -97,32 +96,6 @@ int start_cold_unmap_thread(bloom_config *config, bloom_filtmgr *mgr, int *shoul
     return 1;
 }
 
-/**
-* Starts a memory policing thread which on every
-* check interval compares the resident memory size
-* of the app, and unmaps filters if the memory size
-* exceeds the max allowed percentage of RAM
-* @arg config The configuration
-* @arg mgr The filter manager to use
-* @arg should_run Pointer to an integer that is set to 0
-*   to indicate the thread should exit.
-* @arg t The output thread
-* @return 1 if the thread was started
-*/
-int start_memory_check_thread(bloom_config *config, bloom_filtmgr *mgr, int *should_run, pthread_t *t) {
-    // Return if we are not scheduled
-    if(config->memory_check_interval <= 0){
-        return 0;
-    }
-
-    // Start thread
-    background_thread_args *args;
-    PACK_ARGS();
-    pthread_create(t, NULL, memory_check_thread_main, args);
-    return 1;
-
-}
-
 static void* flush_thread_main(void *in) {
     bloom_config *config;
     bloom_filtmgr *mgr;
@@ -173,12 +146,19 @@ static void* unmap_thread_main(void *in) {
     // Perform the initial checkpoint with the manager
     filtmgr_client_checkpoint(mgr);
 
+    size_t all_memory = getMemorySize();
+    size_t max_memory = (size_t)(config->max_memory_percent * all_memory * 0.01);
+    size_t safe_memory = (size_t)(config->safe_memory_percent * all_memory * 0.01);
+    size_t current_memory;
+    int cold_interval = config->cold_interval;
+
+
     syslog(LOG_INFO, "Cold unmap thread started. Interval: %d seconds.", config->cold_interval);
     unsigned int ticks = 0;
     while (*should_run) {
         usleep(PERIODIC_TIME_USEC);
         filtmgr_client_checkpoint(mgr);
-        if ((++ticks % SEC_TO_TICKS(config->cold_interval)) == 0 && *should_run) {
+        if ((++ticks % SEC_TO_TICKS(cold_interval)) == 0 && *should_run) {
             // List the cold filters
             syslog(LOG_INFO, "Cold unmap started.");
             bloom_filter_list_head *head;
@@ -200,62 +180,26 @@ static void* unmap_thread_main(void *in) {
 
             // Cleanup
             filtmgr_cleanup_list(head);
-        }
-    }
-    return NULL;
-}
 
-static void* memory_check_thread_main(void *in) {
-    bloom_config *config;
-    bloom_filtmgr *mgr;
-    int *should_run;
-    UNPACK_ARGS();
-
-    size_t all_memory = getMemorySize();
-    size_t max_memory = (size_t)(config->max_memory_percent * all_memory * 0.01);
-    size_t safe_memory = (size_t)(config->safe_memory_percent * all_memory * 0.01);
-    size_t current_memory;
-
-    // Perform the initial checkpoint with the mamager
-    filtmgr_client_checkpoint(mgr);
-
-    syslog(LOG_INFO, "Memory check thread started. Interval: %d seconds.", config->memory_check_interval);
-    unsigned int ticks = 0;
-    while (*should_run) {
-        usleep(PERIODIC_TIME_USEC);
-        filtmgr_client_checkpoint(mgr);
-        if ((++ticks % SEC_TO_TICKS(config->memory_check_interval)) == 0 && *should_run) {
-            // check RAM, compare to available and max.
-            current_memory = getCurrentRSS();
-            if (current_memory > max_memory) {
-                syslog(LOG_INFO, "Max memory exceeded. Unmapping filters to reclaim RAM.");
-
-                bloom_filter_list_head *head;
-                int res = filtmgr_list_filters(mgr, NULL, &head);
-                if (res != 0) {
-                    syslog(LOG_WARNING, "Failed to list filters for flushing!");
-                    continue;
-                }
-                bloom_filter_list *node = head->head;
-                unsigned int cmds = 0;
-
-                while ((current_memory > safe_memory) && node){
-
-                    // start flushing filters until you're back below the safe-water mark
-                    syslog(LOG_WARNING, "Unmapping filter '%s' to free RAM.", node->filter_name);
-                    filtmgr_flush_and_unmap_filter(mgr, node->filter_name);
-                    if (!(++cmds % PERIODIC_CHECKPOINT)) {
-                        filtmgr_client_checkpoint(mgr);
-                        current_memory = getCurrentRSS();
+            if (config->memory_check){
+                // check to see if we are exceeding allowed RAM size. If so, start scaling the cold interval to make
+                // cold scans happen more often. Do this by cutting in half the cold_interval with a minimum of
+                // 2 seconds. If we are below the safe RAM size, scale the cold interval back up again, to a maxmimum
+                // of config->cold_interval
+                current_memory = getCurrentRSS();
+                if (current_memory > max_memory){
+                    cold_interval = cold_interval/2;
+                    if (cold_interval < 2) cold_interval = 2;
+                    syslog(LOG_INFO, "Scaling cold_interval to preserve RAM. New interval: %d", cold_interval);
+                } else if ((current_memory < safe_memory) && (cold_interval != config->cold_interval)){
+                    cold_interval = cold_interval * 2;
+                    if (cold_interval > config->cold_interval) {
+                        cold_interval = config->cold_interval;
                     }
-                    node = node->next;
+                    syslog(LOG_INFO, "Unscaling cold_interval since RAM is at safe level. New interval: %d", cold_interval);
                 }
-                filtmgr_cleanup_list(head);
-
             }
         }
-
     }
     return NULL;
-
 }

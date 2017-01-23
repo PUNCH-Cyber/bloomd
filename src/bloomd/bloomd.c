@@ -160,11 +160,10 @@ int main(int argc, char **argv) {
     }
 
     // Start the background tasks
-    int flush_on, unmap_on, memory_on;
-    pthread_t flush_thread, unmap_thread, memory_thread;
+    int flush_on, unmap_on;
+    pthread_t flush_thread, unmap_thread;
     flush_on = start_flush_thread(config, mgr, &SHOULD_RUN, &flush_thread);
     unmap_on = start_cold_unmap_thread(config, mgr, &SHOULD_RUN, &unmap_thread);
-    memory_on = start_memory_check_thread(config, mgr, &SHOULD_RUN, &memory_thread);
 
     // Initialize the networking
     bloom_networking *netconf = NULL;
@@ -196,7 +195,6 @@ int main(int argc, char **argv) {
     // Shutdown the background tasks
     if (flush_on) pthread_join(flush_thread, NULL);
     if (unmap_on) pthread_join(unmap_thread, NULL);
-    if (memory_on) pthread_join(memory_thread, NULL);
 
     // Cleanup the filters
     destroy_filter_manager(mgr);

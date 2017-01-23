@@ -22,7 +22,7 @@ typedef struct {
     int in_memory;
     int worker_threads;
     int use_mmap;
-    int memory_check_interval;
+    int memory_check;
     int max_memory_percent;
     int safe_memory_percent;
 } bloom_config;
